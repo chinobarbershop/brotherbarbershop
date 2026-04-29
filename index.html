@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>BROTHER BARBERSHOP | Gestión</title>
+  <title>BROTHER BARBERSHOP | </title>
   <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script>
@@ -22,6 +22,8 @@
     .img-prev { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; background: #eee; }
     .time-slot { background: white; border: 1px solid #ddd; padding: 10px; text-align: center; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; }
     .time-slot.active { background: var(--accent); color: white; border-color: var(--accent); }
+    /* Estilo para horas no disponibles */
+    .time-slot.disabled { background: #eee; color: #bbb; cursor: not-allowed; border-color: #ddd; text-decoration: line-through; }
     
     .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 15px; }
     .service-card { background: white; border-radius: 12px; border: 1px solid #ddd; overflow: hidden; cursor: pointer; text-align: center; position: relative; }
@@ -57,8 +59,8 @@
       <h2 style="margin-bottom:20px;">BROTHER BARBERSHOP</h2>
       <input type="text" id="u-name" placeholder="Tu Nombre">
       <input type="text" id="u-phone" placeholder="WhatsApp (Clientes)">
-      <input type="password" id="u-pass" placeholder="Contraseña (Solo Barberos)">
-      <button onclick="handleLogin()" style="width:100%; padding:15px; margin-top:15px; background:var(--dark); color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">ACCEDER</button>
+      <input type="password" id="u-pass" placeholder="Contraseña ">
+      <button onclick="handleLogin()" style="width:100%; padding:15px; margin-top:15px; background:var(--dark); color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer;">ACCEDER AL CLUB </button>
     </div>
   </div>
 
@@ -82,7 +84,7 @@
           <h3>1. Elige Barbero</h3>
           <div style="display:flex; gap:10px; margin-bottom:20px;" id="barber-selectors">
             <div class="nav-btn" id="b-Chino" style="flex:1; text-align:center;" onclick="setBarber('Chino', '50377543123')">CHINO</div>
-            <div class="nav-btn" id="b-Francisco" style="flex:1; text-align:center;" onclick="setBarber('Francisco', '50375947426')">FRANCISCO</div>
+            <div class="nav-btn" id="b-Francisco" style="flex:1; text-align:center;" onclick="setBarber('Francisco', '50375947426')">FRANCISCO ARMANDO</div>
           </div>
           <h3>2. Elige Estilo (Click para ampliar)</h3>
           <div class="services-grid" id="services-render"></div>
@@ -103,7 +105,11 @@
     </div>
 
     <div id="screen-agenda" class="screen">
-      <div class="card"><h3>Hoy: <span id="agenda-date"></span></h3><div id="agenda-list"></div></div>
+      <div class="card">
+        <h3>AGENDA POR DÍA</h3>
+        <input type="date" id="agenda-date-picker" onchange="renderAgenda()" style="margin-bottom: 15px; max-width: 250px;">
+        <div id="agenda-list"></div>
+      </div>
     </div>
 
     <div id="screen-clients" class="screen">
@@ -143,6 +149,12 @@
     let user = {}, selectedBarber = {}, selectedService = null, selectedTime = null;
     let allReservas = {}, allCortes = {}, barberStatus = { Chino: true, Francisco: true };
 
+    // Configurar fechas por defecto
+    const hoyISO = new Date().toISOString().split("T")[0];
+    document.getElementById('res-date').min = hoyISO;
+    document.getElementById('res-date').value = hoyISO;
+    document.getElementById('agenda-date-picker').value = hoyISO;
+
     function handleLogin() {
       const n = document.getElementById('u-name').value.trim();
       const p = document.getElementById('u-phone').value.trim();
@@ -176,7 +188,8 @@
 
     function format12h(t) {
       let [h, m] = t.split(':');
-      return (h % 12 || 12) + ':' + m + (h >= 12 ? ' PM' : ' AM');
+      let hh = parseInt(h);
+      return (hh % 12 || 12) + ':' + m + (hh >= 12 ? ' PM' : ' AM');
     }
 
     function openPreview(id, name, img) {
@@ -190,9 +203,7 @@
         modal.style.display = 'flex';
     }
 
-    function closeModal() {
-        document.getElementById('modal-view').style.display = 'none';
-    }
+    function closeModal() { document.getElementById('modal-view').style.display = 'none'; }
 
     function selectService(id, name, img) {
         selectedService = {id, name, img};
@@ -201,35 +212,21 @@
         if(el) el.classList.add('selected');
     }
 
-    // CORRECCIÓN CLAVE AQUÍ:
     async function uploadCorte() {
       const fileInput = document.getElementById('new-file');
       const file = fileInput.files[0];
       const name = document.getElementById('new-name').value.trim();
       const btn = document.getElementById('btn-upload');
-
       if(!file || !name) return alert("Sube foto y pon nombre");
-      
-      btn.disabled = true;
-      btn.innerText = "Subiendo...";
-
+      btn.disabled = true; btn.innerText = "Subiendo...";
       try {
         const ref = storage.ref('cortes/' + Date.now() + "_" + file.name);
         const snap = await ref.put(file);
         const url = await snap.ref.getDownloadURL();
-        
         await db.ref('cortes').push({ name: name, img: url });
-        
         alert("¡Estilo guardado!");
-        document.getElementById('new-name').value = "";
-        fileInput.value = "";
-      } catch (e) {
-        console.error(e);
-        alert("Error al subir imagen");
-      } finally {
-        btn.disabled = false;
-        btn.innerText = "GUARDAR Y SUBIR";
-      }
+        document.getElementById('new-name').value = ""; fileInput.value = "";
+      } catch (e) { alert("Error al subir"); } finally { btn.disabled = false; btn.innerText = "GUARDAR Y SUBIR"; }
     }
 
     function renderServices() {
@@ -261,7 +258,7 @@
 
     function checkAndSend() {
       const d = document.getElementById('res-date').value;
-      if(!selectedService || !selectedTime || !d) return alert("Faltan datos de cita");
+      if(!selectedService || !selectedTime || !d || !selectedBarber.name) return alert("Faltan datos de cita");
       let fN = user.name, fP = user.phone, manual = (user.role !== 'client');
       if(manual) { fN = document.getElementById('manual-name').value; fP = document.getElementById('manual-phone').value; }
       if(!fN || !fP) return alert("Nombre y WhatsApp requeridos");
@@ -269,16 +266,19 @@
       const r = { barbero: selectedBarber.name, cliente: fN, phone: fP, corte: selectedService.name, fecha: d, hora: selectedTime, status: 'pendiente', timestamp: Date.now() };
       db.ref('reservas').push().set(r).then(() => {
         const h12 = format12h(selectedTime);
-        const target = manual ? fP : selectedBarber.phone;
         const msg = `💈 *BROTHER BARBERSHOP* 💈\n\nReserva confirmada:\n👤 *Cliente:* ${fN}\n✂️ *Corte:* ${selectedService.name}\n📅 *Fecha:* ${d}\n⏰ *Hora:* ${h12}\n💈 *Barbero:* ${selectedBarber.name}`;
-        window.open(`https://wa.me/${target.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+        // Envía mensaje al barbero con los datos
+        window.open(`https://wa.me/${selectedBarber.phone}?text=${encodeURIComponent(msg)}`, '_blank');
       });
     }
 
     function renderAgenda() {
-      const list = document.getElementById('agenda-list'), hoy = new Date().toISOString().split("T")[0];
-      document.getElementById('agenda-date').innerText = hoy;
-      const citas = Object.keys(allReservas).map(k => ({...allReservas[k], k})).filter(r => (user.role === 'admin' || r.barbero === user.name) && r.fecha === hoy && r.status !== 'eliminado');
+      const list = document.getElementById('agenda-list');
+      const fechaSeleccionada = document.getElementById('agenda-date-picker').value;
+      
+      const citas = Object.keys(allReservas).map(k => ({...allReservas[k], k}))
+        .filter(r => (user.role === 'admin' || r.barbero === user.name) && r.fecha === fechaSeleccionada && r.status !== 'eliminado');
+      
       list.innerHTML = citas.sort((a,b)=> a.hora.localeCompare(b.hora)).map(r => {
         const cData = Object.values(allCortes).find(c => c.name === r.corte);
         return `
@@ -291,7 +291,7 @@
             <button onclick="db.ref('reservas/${r.k}').update({status:'eliminado'})" style="border:none; background:red; color:white; border-radius:5px; padding:5px 10px; cursor:pointer;">X</button>
           </div>
         </div>`;
-      }).join('') || "Sin citas para hoy.";
+      }).join('') || "No hay citas para este día.";
     }
 
     function renderCRM() {
@@ -313,19 +313,40 @@
         </div>`).join('');
     }
 
+    // CORRECCIÓN RELOJ SELECTIVO
     function renderTimeSlots() {
       const grid = document.getElementById('time-grid'), d = document.getElementById('res-date').value;
       grid.innerHTML = ""; if(!d || !selectedBarber.name) return;
-      const ahora = new Date(), hoy = ahora.toISOString().split('T')[0];
-      const ocupadas = Object.values(allReservas).filter(r => r.barbero === selectedBarber.name && r.fecha === d && r.status !== 'eliminado').map(r => r.hora);
+      
+      const ahora = new Date();
+      const hActual = ahora.getHours();
+      const mActual = ahora.getMinutes();
+      
+      const ocupadas = Object.values(allReservas)
+        .filter(r => r.barbero === selectedBarber.name && r.fecha === d && r.status !== 'eliminado')
+        .map(r => r.hora);
+
       for(let h = 8; h <= 17; h++) {
         for(let m of ['00', '45']) {
           if(h === 17 && m === '45') continue;
           let t24 = (h < 10 ? '0'+h : h) + ':' + m;
-          if(ocupadas.includes(t24)) continue;
-          if(d === hoy && (h < ahora.getHours() || (h === ahora.getHours() && Number(m) <= ahora.getMinutes()))) continue;
-          let btn = document.createElement('div'); btn.className = 'time-slot'; btn.innerText = format12h(t24);
-          btn.onclick = (e) => { selectedTime = t24; document.querySelectorAll('.time-slot').forEach(x => x.classList.remove('active')); e.target.classList.add('active'); };
+          
+          let estaOcupada = ocupadas.includes(t24);
+          let estaPasada = (d === hoyISO && (h < hActual || (h === hActual && parseInt(m) <= mActual)));
+
+          let btn = document.createElement('div');
+          btn.className = 'time-slot';
+          btn.innerText = format12h(t24);
+
+          if (estaOcupada || estaPasada) {
+            btn.classList.add('disabled');
+          } else {
+            btn.onclick = (e) => { 
+                selectedTime = t24; 
+                document.querySelectorAll('.time-slot').forEach(x => x.classList.remove('active')); 
+                e.target.classList.add('active'); 
+            };
+          }
           grid.appendChild(btn);
         }
       }
@@ -361,7 +382,6 @@
         document.getElementById('screen-' + scr).classList.add('active'); 
         e.target.classList.add('active'); 
     }
-    document.getElementById('res-date').min = new Date().toISOString().split("T")[0];
   </script>
 </body>
 </html>
